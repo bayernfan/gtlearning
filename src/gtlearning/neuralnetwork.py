@@ -87,8 +87,8 @@ class DenseLayer(Layer):
             for j, prev_output in enumerate(self.inputs):
                 weights_per_neuron[j] -= output_deltas[i] * prev_output
         propagated_targets = [prev_output - np.dot(output_deltas, [n[i] for n in self.weights])
-                for i, prev_output in enumerate(self.inputs)]
-        return self.prev_layer.backpropagate(propagated_targets) if  self.prev_layer else propagated_targets
+                              for i, prev_output in enumerate(self.inputs)]
+        return self.prev_layer.backpropagate(propagated_targets) if self.prev_layer else propagated_targets
 
 
 class Activation(object):
