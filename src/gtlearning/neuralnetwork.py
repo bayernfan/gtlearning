@@ -14,13 +14,16 @@ class SequentialNetwork(object):
         reduce(lambda l, r: l.link(r), self.layers)
         return self
 
-    def fit(self, x_train, y_train, batch_size=None, epochs=1):
+    def fit(self, x_train, y_train, batch_size=None, epochs=1, verbose=0):
         # todo: use the batch_size
 
-        for _ in range(epochs):
+        for i_epochs in range(epochs):
+            random.shuffle(x_train)
             for i, inputs in enumerate(x_train):
                 self.layers[0].feed_forward(inputs)
                 self.layers[-1].backpropagate(y_train[i])
+            if verbose > 0:
+                print('Epoche {} finished.'.format(i_epochs))
         return self
 
     def predict(self, x, batch_size=None):
@@ -28,15 +31,11 @@ class SequentialNetwork(object):
 
 
 class Layer(object):
-    def __init__(self, activation="sigmoid"):
+    def __init__(self):
         self.weights = []
         self.shape = None
         self.prev_layer = None
         self.next_layer = None
-        if activation == "sigmoid":
-            self.activation = SigmoidActivation()
-        else:
-            self.activation = activation
 
     def link(self, next_layer):
         self.next_layer = next_layer
@@ -55,7 +54,11 @@ class Layer(object):
 
 class DenseLayer(Layer):
     def __init__(self, units, input_shape=None, activation="sigmoid"):
-        super(DenseLayer, self).__init__(activation=activation)
+        super(DenseLayer, self).__init__()
+        if activation == "sigmoid":
+            self.activation = SigmoidActivation()
+        else:
+            self.activation = activation
         self.shape = (units,)
         self.input_shape = input_shape
         if input_shape is not None:
@@ -74,20 +77,41 @@ class DenseLayer(Layer):
 
     def feed_forward(self, inputs):
         self.inputs = inputs
-        outputs = [self.activation.activate(np.dot(weights_per_neuron, inputs) + self.biases[i])
-                   for i, weights_per_neuron in enumerate(self.weights)]
-        self.outputs = outputs
+        outputs = self.outputs = [self.activation.activate(np.dot(weights_per_neuron, inputs) + self.biases[i])
+                                  for i, weights_per_neuron in enumerate(self.weights)]
         return self.next_layer.feed_forward(outputs) if self.next_layer else outputs
 
     def backpropagate(self, targets):
-        # todo: adjusstments for biaaes
         output_deltas = [self.activation.derivate(output, output - target)
                          for output, target in zip(self.outputs, targets)]
-        for i, weights_per_neuron in enumerate(self.weights):
+        for i, (weights_per_neuron, output_delta) in enumerate(zip(self.weights, output_deltas)):
             for j, prev_output in enumerate(self.inputs):
-                weights_per_neuron[j] -= output_deltas[i] * prev_output
+                self.biases[i] -= output_delta
+                weights_per_neuron[j] -= output_delta * prev_output
         propagated_targets = [prev_output - np.dot(output_deltas, [n[i] for n in self.weights])
                               for i, prev_output in enumerate(self.inputs)]
+        return self.prev_layer.backpropagate(propagated_targets) if self.prev_layer else propagated_targets
+
+
+class FlattenLayer(Layer):
+    def __init__(self):
+        super(FlattenLayer, self).__init__()
+        self.shape = None
+        self.input_shape = None
+
+    def link_to(self, prev_layer):
+        if self.input_shape is None:
+            input_shape = self.input_shape = prev_layer.shape
+            self.shape = (reduce(lambda l, r: l * r, input_shape),)
+        return super(FlattenLayer, self).link_to(prev_layer)
+
+    def feed_forward(self, inputs):
+        self.inputs = inputs
+        outputs = self.outputs = np.reshape(inputs, self.shape)
+        return self.next_layer.feed_forward(outputs) if self.next_layer else outputs
+
+    def backpropagate(self, targets):
+        propagated_targets = np.reshape(targets, self.input_shape)
         return self.prev_layer.backpropagate(propagated_targets) if self.prev_layer else propagated_targets
 
 
@@ -107,7 +131,7 @@ class SigmoidActivation(Activation):
         super(SigmoidActivation, self).__init__()
 
     def activate(self, input):
-        return 1. / (1. + math.exp(-input))
+        return 1. / (1. + np.exp(-input))
 
     def derivate(self, x, delta_x):
         return x * (1. - x) * delta_x
