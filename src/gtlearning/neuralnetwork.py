@@ -19,7 +19,7 @@ class SequentialNetwork(object):
 
         for i_epochs in range(epochs):
             if verbose > 0:
-                print('Epoche ({}) {}'.format(i_epochs, '{'))
+                print('Epoch ({}) {}'.format(i_epochs, '{'))
             for inputs, targets in zip(x_train, y_train):
                 outputs = self.layers[0].feed_forward(inputs)
                 self.layers[-1].back_propagate(outputs - targets)
@@ -56,15 +56,21 @@ class Layer(object):
         pass
 
 
-class DenseLayer(Layer):
-    def __init__(self, units, input_shape=None, activation="sigmoid"):
-        super(DenseLayer, self).__init__()
-
+class ActivationEnabled(object):
+    def __init__(self, activation):
         activation = activation.lower()
         if activation == "sigmoid":
             self.activation = SigmoidActivation()
+        elif activation == "relu":
+            self.activation = ReLUActivation()
         else:
-            self.activation = activation  # todo: allow other activations
+            self.activation = None
+
+
+class DenseLayer(Layer, ActivationEnabled):
+    def __init__(self, units, input_shape=None, activation="sigmoid"):
+        super().__init__()
+        ActivationEnabled.__init__(self, activation)
 
         self.shape = (units,)
 
@@ -91,7 +97,7 @@ class DenseLayer(Layer):
 
     def back_propagate(self, output_deltas):
         input_deltas = self.activation.derivate(self.outputs, output_deltas)
-        n, m = self.weights.shape;
+        n, m = self.weights.shape
         for i in range(n):
             input_delta = input_deltas[i]
             self.weights[i] -= input_delta * self.inputs
@@ -105,7 +111,7 @@ class DenseLayer(Layer):
 
 class FlattenLayer(Layer):
     def __init__(self):
-        super(FlattenLayer, self).__init__()
+        super().__init__()
         self.input_shape = None
 
     def link_to(self, prev_layer):
@@ -124,9 +130,10 @@ class FlattenLayer(Layer):
         return self.prev_layer.back_propagate(propagated_targets) if self.prev_layer else propagated_targets
 
 
-class Conv2DLayer(Layer):
+class Conv2DLayer(Layer, ActivationEnabled):
     def __init__(self, filters, kernel_size, strides=(1, 1), padding='valid', input_shape=None, activation="sigmoid"):
-        super(Conv2DLayer, self).__init__()
+        super().__init__()
+        ActivationEnabled.__init__(self, activation)
 
         self.filters = filters
         self.kernel_size = kernel_size
@@ -136,12 +143,6 @@ class Conv2DLayer(Layer):
         if input_shape is not None:
             self._init_shape()
             self._init_weights_and_biases()
-
-        activation = activation.lower()
-        if activation == "sigmoid":
-            self.activation = SigmoidActivation()
-        else:
-            self.activation = activation  # todo: allow other activations
 
     def link_to(self, prev_layer):
         if self.input_shape is None:
@@ -210,22 +211,34 @@ class Conv2DLayer(Layer):
 
 
 class Activation(object):
-    def __init__(self):
-        pass
-
-    def activate(self, input):
-        return input
+    def activate(self, x):
+        return x
 
     def derivatie(self, x, delta_x):
         return 1.
 
 
 class SigmoidActivation(Activation):
-    def __init__(self):
-        super(SigmoidActivation, self).__init__()
-
-    def activate(self, input):
-        return 1. / (1. + np.exp(-input))
+    def activate(self, x):
+        return 1. / (1. + np.exp(-x))
 
     def derivate(self, x, delta_x):
         return x * (1 - x) * delta_x
+
+
+class ReLUActivation(Activation):
+    def activate(self, x):
+        if isinstance(x, (np.ndarray, list, tuple)):
+            x_copy = np.array(x)
+            x_copy[x_copy < 0] = 0.0
+            return x_copy
+        else:
+            return max(x, 0.0)
+
+    def derivate(self, x, delta_x):
+        if isinstance(x, (np.ndarray, list, tuple)):
+            delta_x_copy = np.array(delta_x)
+            delta_x_copy[x < 0] = 0.0
+            return delta_x_copy
+        else:
+            return 0 if x < 0 else delta_x

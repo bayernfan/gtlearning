@@ -113,8 +113,16 @@ class SequentialNetworkTestCase(unittest.TestCase):
         self.assertTrue(True)
 
 
-    def test_flattenLayers(self):
-        pass  # todo: test when Conv2DLayer is ready
+    def test_reluActivation(self):
+        output_size = self.output_size
+        network = SequentialNetwork().add(
+            Conv2DLayer(2, kernel_size=(3,3), activation='relu', input_shape=self.inputs2D[0].shape)).add(
+            FlattenLayer()).add(
+            DenseLayer(output_size)).compile().fit(
+            self.inputs2D, self.targets, epochs=999, verbose=0)
+        for i in range(output_size):
+            print((network.predict(self.inputs2D[i]) * 100).tolist())
+        self.assertTrue(True)
 
 
 
