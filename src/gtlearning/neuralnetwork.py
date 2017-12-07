@@ -139,8 +139,10 @@ class Conv2DLayer(Layer, ActivationEnabled):
         self.kernel_size = kernel_size
         self.strides = strides
         self.padding = padding.lower()
-        self.input_shape = input_shape[:3] if len(input_shape) >= 3 else (*input_shape[:2], 1)
-        if input_shape is not None:
+        if input_shape is None:
+            self.input_shape = None
+        else:
+            self.input_shape = input_shape[:3] if len(input_shape) >= 3 else (*input_shape[:2], 1)
             self._init_shape()
             self._init_weights_and_biases()
 
@@ -149,7 +151,7 @@ class Conv2DLayer(Layer, ActivationEnabled):
             self.input_shape = prev_layer.shape
             self._init_shape()
             self._init_weights_and_biases()
-        return super(Conv2DLayer, self).link_to(prev_layer)
+        return super().link_to(prev_layer)
 
     def _init_shape(self):
         shape_xy = [self._round_to_int((self.input_shape[i] - (self.kernel_size[i] - 1)) / self.strides[i])
@@ -162,8 +164,9 @@ class Conv2DLayer(Layer, ActivationEnabled):
 
     def _init_weights_and_biases(self):
         shape = self.shape
-        self.weights = np.random.rand(*shape, *self.kernel_size, self.input_shape[2])
-        self.biases = np.zeros(reduce(lambda l, r: l * r, shape)).reshape(shape)
+        # self.weights = np.random.rand(*shape, *self.kernel_size, self.input_shape[2])
+        self.weights = np.random.rand(1, 1, shape[2], *self.kernel_size, self.input_shape[2])
+        self.biases = np.zeros(shape[2]).reshape((1, 1, shape[2]))
 
     def feed_forward(self, inputs):
         if inputs.shape != self.input_shape:
@@ -171,41 +174,44 @@ class Conv2DLayer(Layer, ActivationEnabled):
         if self.padding == 'same':
             pass  # todo: allow the 'same' padding
         self.inputs = inputs
+        shape = self.shape
         stride_x, stride_y = self.strides
         kernel_x, kernel_y = self.kernel_size
-        n_x, n_y, n_f, m_x, m_y, m_f = self.weights.shape
-        m_size = m_x * m_y * m_f
+        shape_x, shape_y, shape_n = shape
+        kernel_n = self.input_shape[2]
+        kernel_len = kernel_x * kernel_y * kernel_n
         outputs = [
             self.activation.activate(
                 np.dot(
-                    self.weights[i_x, i_y, i_f, :, :, :].reshape((m_size,)),
+                    self.weights[0, 0, i_n, :, :, :].reshape((kernel_len,)),
                     inputs[i_x * stride_x:i_x * stride_x + kernel_x,
                     i_y * stride_y:i_y * stride_y + kernel_y,
-                    :].reshape((m_size,))
+                    :].reshape((kernel_len,))
                 ) +
-                self.biases[i_x, i_y, i_f])
-            for i_x in range(n_x)
-            for i_y in range(n_y)
-            for i_f in range(n_f)]
-        self.outputs = outputs = np.array(outputs).reshape(self.shape)
+                self.biases[0, 0, i_n])
+            for i_x in range(shape_x)
+            for i_y in range(shape_y)
+            for i_n in range(shape_n)]
+        self.outputs = outputs = np.array(outputs).reshape(shape)
         return self.next_layer.feed_forward(outputs) if self.next_layer else outputs
 
     def back_propagate(self, output_deltas):
         input_deltas = self.activation.derivate(self.outputs, output_deltas)
+        shape = self.shape
         stride_x, stride_y = self.strides
         kernel_x, kernel_y = self.kernel_size
-        n_x, n_y, n_f, m_x, m_y, m_f = self.weights.shape
-        n_size = n_x * n_y * n_f
-        for i_x, i_y, i_f in [(x, y, f) for x in range(n_x) for y in range(n_y) for f in range(n_f)]:
-            input_delta = input_deltas[i_x, i_y, i_f]
-            self.biases[i_x, i_y, i_f] -= input_delta
-            self.weights[i_x, i_y, i_f] -= input_delta * self.inputs[i_x * stride_x:i_x * stride_x + kernel_x,
-                                                         i_y * stride_y:i_y * stride_y + kernel_y, :]
-        propagated_deltas = [np.dot(input_deltas.reshape((n_size,)),
-                                    self.weights[:, :, :, i_x, i_y, i_f].reshape((n_size,)))
-                             for i_x in range(m_x)
-                             for i_y in range(m_y)
-                             for i_f in range(m_f)]
+        kernel_n = self.input_shape[2]
+        shape_x, shape_y, shape_n = shape
+        shape_len = shape_x * shape_y * shape_n
+        for i_x, i_y, i_n in [(x, y, n) for x in range(shape_x) for y in range(shape_y) for n in range(shape_n)]:
+            input_delta = input_deltas[i_x, i_y, i_n]
+            self.biases[0, 0, i_n] -= input_delta
+            self.weights[0, 0, i_n] -= input_delta * self.inputs[i_x * stride_x:i_x * stride_x + kernel_x,
+                                                     i_y * stride_y:i_y * stride_y + kernel_y, :]
+        propagated_deltas = [sum((input_deltas * self.weights[:, :, :, i_x, i_y, i_n]).reshape((shape_len,)))
+                             for i_x in range(kernel_x)
+                             for i_y in range(kernel_y)
+                             for i_n in range(kernel_n)]
         propagated_deltas = np.array(propagated_deltas)
         return self.prev_layer.back_propagate(propagated_deltas) if self.prev_layer else propagated_deltas
 
