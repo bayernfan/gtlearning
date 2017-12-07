@@ -212,14 +212,14 @@ class Conv2DLayer(Layer, ActivationEnabled):
             self.biases[0, 0, i_n] -= input_delta
             self.weights[0, 0, i_n] -= input_delta * self.inputs[i_x * stride_x:i_x * stride_x + kernel_x,
                                                      i_y * stride_y:i_y * stride_y + kernel_y, :]
-        propagated_deltas = self.inputs * 0
+        propagated_deltas = self.inputs * 0.0
         for i_x, i_y, i_n in [(x, y, n)
                               for x in range(shape_x)
                               for y in range(shape_y)
                               for n in range(shape_n)]:
             propagated_deltas[i_x * stride_x:i_x * stride_x + kernel_x,
             i_y * stride_y:i_y * stride_y + kernel_y,
-            :] = self.weights[0, 0, i_n] * input_deltas[i_x, i_y, i_n]
+            :] += self.weights[0, 0, i_n] * input_deltas[i_x, i_y, i_n]
 
         return self.prev_layer.back_propagate(propagated_deltas) if self.prev_layer else propagated_deltas
 
@@ -260,7 +260,6 @@ class MaxPooling2DLayer(Layer):
         kernel_x, kernel_y = self.pool_size
         shape_x, shape_y, shape_n = shape
         kernel_n = self.input_shape[2]
-        kernel_len = kernel_x * kernel_y * kernel_n
         outputs = [np.max(inputs[i_x * stride_x:i_x * stride_x + kernel_x, i_y * stride_y:i_y * stride_y + kernel_y, :])
                    for i_x in range(shape_x)
                    for i_y in range(shape_y)
@@ -270,14 +269,19 @@ class MaxPooling2DLayer(Layer):
 
     def back_propagate(self, output_deltas):
         input_deltas = output_deltas
-        in_shape_x, in_shape_y, in_shape_n = in_shape = self.input_shape
+        stride_x, stride_y = self.strides
+        kernel_x, kernel_y = self.pool_size
         shape_x, shape_y, shape_n = self.shape
         shape_len = shape_x * shape_y * shape_n
-        propagated_deltas = [sum((input_deltas).reshape((shape_len,)))
-                             for i_x in range(in_shape_x)
-                             for i_y in range(in_shape_y)
-                             for i_n in range(in_shape_n)]
-        propagated_deltas = np.array(propagated_deltas)
+        propagated_deltas = self.inputs*0.0
+        for i_x, i_y, i_n in [(x, y, n)
+                              for x in range(shape_x)
+                              for y in range(shape_y)
+                              for n in range(shape_n)]:
+            propagated_deltas[i_x * stride_x:i_x * stride_x + kernel_x,
+            i_y * stride_y:i_y * stride_y + kernel_y,
+            :] += input_deltas[i_x, i_y, i_n]
+
         return self.prev_layer.back_propagate(propagated_deltas) if self.prev_layer else propagated_deltas
 
 

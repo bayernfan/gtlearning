@@ -123,6 +123,18 @@ class SequentialNetworkTestCase(unittest.TestCase):
             print((network.predict(self.inputs2D[i]) * 100).tolist())
         self.assertTrue(True)
 
+    def test_MaxPooling2DLayer(self):
+        output_size = self.output_size
+        network = SequentialNetwork().add(
+            Conv2DLayer(2, kernel_size=(3, 3), input_shape=self.inputs2D[0].shape)).add(
+            MaxPooling2DLayer()).add(
+            FlattenLayer()).add(
+            DenseLayer(output_size)).compile().fit(
+            self.inputs2D, self.targets, epochs=9999, verbose=0)
+        for i in range(output_size):
+            print((network.predict(self.inputs2D[i]) * 100).tolist())
+        self.assertTrue(True)
+
 
 if __name__ == '__main__':
     unittest.main()
