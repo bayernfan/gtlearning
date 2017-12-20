@@ -135,6 +135,26 @@ class SequentialNetworkTestCase(unittest.TestCase):
             print((network.predict(self.inputs2D[i]) * 100).tolist())
         self.assertTrue(True)
 
+    def test_mean_squared_error(self):
+        output_size = self.output_size
+        network = SequentialNetwork().add(
+            Conv2DLayer(2, kernel_size=(3, 3), input_shape=self.inputs2D[0].shape)).add(
+            FlattenLayer()).add(
+            DenseLayer(output_size)).compile().fit(
+            self.inputs2D, self.targets, epochs=399, verbose=0)
+        print(network.evaluate(self.inputs, self.targets))
+        self.assertTrue(True)
+
+    def test_mean_absolute_error(self):
+        output_size = self.output_size
+        network = SequentialNetwork().add(
+            Conv2DLayer(2, kernel_size=(3, 3), input_shape=self.inputs2D[0].shape)).add(
+            FlattenLayer()).add(
+            DenseLayer(output_size)).compile().fit(
+            self.inputs2D, self.targets, epochs=399, verbose=0)
+        print(network.evaluate(self.inputs, self.targets, loss='mean_absolute_error'))
+        self.assertTrue(True)
+
 
 if __name__ == '__main__':
     unittest.main()

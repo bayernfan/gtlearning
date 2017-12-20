@@ -27,6 +27,11 @@ class SequentialNetwork(object):
                 print('}')
         return self
 
+    def evaluate(self, x_test, y_test, loss='mean_squared_error'):
+        loss_func = LossFunction(loss)
+        y_pred = [self.predict(x) for x, y in zip(x_test, y_test)]
+        return loss_func(y_pred, y_test)
+
     def predict(self, x, batch_size=None):
         return self.layers[0].feed_forward(x)
 
@@ -273,7 +278,7 @@ class MaxPooling2DLayer(Layer):
         kernel_x, kernel_y = self.pool_size
         shape_x, shape_y, shape_n = self.shape
         shape_len = shape_x * shape_y * shape_n
-        propagated_deltas = self.inputs*0.0
+        propagated_deltas = self.inputs * 0.0
         for i_x, i_y, i_n in [(x, y, n)
                               for x in range(shape_x)
                               for y in range(shape_y)
@@ -317,3 +322,23 @@ class ReLUActivation(Activation):
             return delta_x_copy
         else:
             return 0 if x < 0 else delta_x
+
+
+class LossFunction(object):
+    def __init__(self, loss):
+        self._loss_func = LossFunction.__dict__['_{}'.format(loss)] if isinstance(loss, str) else loss
+
+    def __call__(self, *args, **kwargs):
+        return self._loss_func(self, *args, **kwargs)
+
+    def _mean_squared_error(self, y_pred, y_test):
+        losses = [np.average((p - t) ** 2)
+                  for p, t in zip(y_pred, y_test)]
+        loss = np.average(losses)
+        return loss, 1 - loss
+
+    def _mean_absolute_error(self, y_pred, y_test):
+        losses = [np.average(np.abs(p - t))
+                  for p, t in zip(y_pred, y_test)]
+        loss = np.average(losses)
+        return loss, 1 - loss
